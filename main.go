@@ -39,7 +39,7 @@ type Chunk struct {
 
 func main() {
 	raw := "users_metadata.csv"
-	sorted := "go.csv"
+	sorted := "gogo.csv"
 	out := "grouped.csv"
 
 	delim := []byte{'\x01'}
@@ -60,11 +60,11 @@ func main() {
 }
 
 func GroupData(in, out string, concurrency int, delim, sep []byte) {
-	inFile, err := os.Open("go.csv")
+	inFile, err := os.Open(in)
 	if err != nil {
 		log.Errorf("failed to open file: %v", err)
 	}
-	outFile, err := os.Create("grouped.csv")
+	outFile, err := os.Create(out)
 	if err != nil {
 		log.Errorf("failed to create file: %v")
 	}
@@ -268,11 +268,23 @@ func findOffsets(file *os.File, size int, parallelizm int) []int {
 }
 
 func sortFile(in, out string) bool {
-	sortCommand := fmt.Sprintf("export LC_ALL=C && tail -n +2 %s | cut -d $'\\001' -f 2,3,4,7 | sort -n -t $'\\001' -k1,1 -k4,4 > %s", in, out)
+	sortCommand := fmt.Sprintf("export LC_ALL=C && time tail -n +2 %s | cut -d $'\\001' -f 2,3,4,7 | split -l2500000 -  '_tmp'; ls -1 _tmp* | while read FILE; do sort -n -t $'\\001' -k1,1 -k4,4 $FILE -o $FILE & done;", in)
+	mergeCommand := fmt.Sprintf("export LC_ALL=C && sort -nmk1,1 -k4,4 _tmp* > %s", out)
+	deleteCommand := fmt.Sprintf("rm _tmp*")
 	log.Infof("cutting and sorting %s into %s", in, out)
 	_, err := exec.Command("bash", "-c", sortCommand).Output()
 	if err != nil {
 		fmt.Errorf("failed to execute command: %s error: %v", sortCommand, err)
+		return false
+	}
+	_, err = exec.Command("bash", "-c", mergeCommand).Output()
+	if err != nil {
+		fmt.Errorf("failed to execute command: %s error: %v", mergeCommand, err)
+		return false
+	}
+	_, err = exec.Command("bash", "-c", deleteCommand).Output()
+	if err != nil {
+		fmt.Errorf("failed to execute command: %s error: %v", deleteCommand, err)
 		return false
 	}
 	log.Infof("finished cutting and sorting %s into %s", in, out)
